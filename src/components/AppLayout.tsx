@@ -13,7 +13,7 @@ import {
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/auth';
+import { useAuthStore } from '../store/authStore';
 
 const { Sider, Content, Header } = Layout;
 const { Title } = Typography;
@@ -36,6 +36,12 @@ const menuItems: MenuProps['items'] = [
   },
 ];
 
+interface LabelWithProps {
+  props?: {
+    children?: string;
+  };
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuthStore();
   const location = useLocation();
@@ -55,6 +61,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
       onClick: handleLogout,
     },
   ];
+
+  const getPageTitle = () => {
+    const currentItem = menuItems?.find((item) => item?.key === location.pathname);
+    if (currentItem && 'label' in currentItem && currentItem.label) {
+      if (typeof currentItem.label === 'object' && currentItem.label !== null && 'props' in currentItem.label) {
+        return (currentItem.label as LabelWithProps).props?.children || '首页';
+      }
+    }
+    return '首页';
+  };
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -116,16 +132,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             style={{ marginRight: 16 }}
           />
           <Title level={4} style={{ margin: 0 }}>
-            {(() => {
-              const currentItem = menuItems.find((item) => item?.key === location.pathname);
-              if (currentItem && 'label' in currentItem && currentItem.label) {
-                // 检查 label 是否为 React 元素且有 props.children
-                if (typeof currentItem.label === 'object' && currentItem.label !== null && 'props' in currentItem.label) {
-                  return (currentItem.label as any).props?.children || '首页';
-                }
-              }
-              return '首页';
-            })()}
+            {getPageTitle()}
           </Title>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">

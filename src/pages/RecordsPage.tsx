@@ -29,9 +29,9 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
-import type { Category, ExpenseRecord } from '../types';
+import type { Category, ExpenseRecord, RecordFormData } from '../types';
 
 function RecordForm({
   editingRecord,
@@ -41,11 +41,11 @@ function RecordForm({
 }: {
   editingRecord: ExpenseRecord | null;
   categories: Category[];
-  onSubmit: (values: any) => void;
+  onSubmit: (values: RecordFormData) => void;
   submitLoading: boolean;
 }) {
   const [form] = Form.useForm();
-  const [selectedType, setSelectedType] = useState<string>(editingRecord?.type || 'expense');
+  const selectedType = Form.useWatch('type', form) || 'expense';
 
   useEffect(() => {
     if (editingRecord) {
@@ -53,14 +53,12 @@ function RecordForm({
         ...editingRecord,
         created_at: dayjs(editingRecord.created_at),
       });
-      setSelectedType(editingRecord.type);
     } else {
       form.resetFields();
       form.setFieldsValue({
         type: 'expense',
         created_at: dayjs(),
       });
-      setSelectedType('expense');
     }
   }, [editingRecord, form]);
 
@@ -72,6 +70,7 @@ function RecordForm({
       const submitData = {
         ...values,
         category_name: category?.name || '',
+        note: values.note || '',
         created_at: values.created_at.valueOf(),
       };
       await onSubmit(submitData);
@@ -86,8 +85,6 @@ function RecordForm({
         <Radio.Group
           size="large"
           style={{ width: '100%' }}
-          value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
         >
           <Radio.Button value="expense" style={{ flex: 1, textAlign: 'center' }}>
             支出
@@ -169,44 +166,57 @@ export function RecordsPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [recordsRes, categoriesRes, summaryRes] = await Promise.all([
-        api.getRecords({
-          year: currentMonth.year(),
-          month: currentMonth.month() + 1,
-          type: filterType || undefined,
-          category_id: filterCategory || undefined,
-          note: filterNote || undefined,
-          amount_min: filterAmountMin,
-          amount_max: filterAmountMax,
-        }),
-        api.getCategories(),
-        api.getSummary(currentMonth.year(), currentMonth.month() + 1),
-      ]);
-      if (recordsRes.code === 0) {
-        setRecords(recordsRes.data || []);
-      }
-      if (categoriesRes.code === 0) {
-        setCategories(categoriesRes.data || []);
-      }
-      if (summaryRes.code === 0 && summaryRes.data) {
-        setSummary({
-          income: summaryRes.data.total_income || 0,
-          expense: summaryRes.data.total_expense || 0,
-          balance: summaryRes.data.balance || 0,
-        });
-      }
-    } catch {
-      message.error('加载数据失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const [recordsRes, categoriesRes, summaryRes] = await Promise.all([
+          api.getRecords({
+            year: currentMonth.year(),
+            month: currentMonth.month() + 1,
+            type: filterType || undefined,
+            category_id: filterCategory || undefined,
+            note: filterNote || undefined,
+            amount_min: filterAmountMin,
+            amount_max: filterAmountMax,
+          }),
+          api.getCategories(),
+          api.getSummary(currentMonth.year(), currentMonth.month() + 1),
+        ]);
+        
+        if (cancelled) return;
+        
+        if (recordsRes.code === 0) {
+          setRecords(recordsRes.data || []);
+        }
+        if (categoriesRes.code === 0) {
+          setCategories(categoriesRes.data || []);
+        }
+        if (summaryRes.code === 0 && summaryRes.data) {
+          setSummary({
+            income: summaryRes.data.total_income || 0,
+            expense: summaryRes.data.total_expense || 0,
+            balance: summaryRes.data.balance || 0,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          message.error('加载数据失败');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void fetchData();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [currentMonth, filterType, filterCategory, filterNote, filterAmountMin, filterAmountMax]);
 
   const handleAdd = () => {
@@ -224,14 +234,14 @@ export function RecordsPage() {
       const res = await api.deleteRecord(record_id);
       if (res.code === 0) {
         message.success('删除成功');
-        loadData();
+        setCurrentMonth(dayjs()); 
       }
-    } catch (error) {
+    } catch {
       message.error('删除失败');
     }
   };
 
-  const handleSubmit = async (submitData: any) => {
+  const handleSubmit = async (submitData: RecordFormData) => {
     setSubmitLoading(true);
     try {
       if (editingRecord) {
@@ -239,24 +249,24 @@ export function RecordsPage() {
         if (res.code === 0) {
           message.success('更新成功');
           setModalVisible(false);
-          loadData();
+          setCurrentMonth(dayjs());
         }
       } else {
         const res = await api.createRecord(submitData);
         if (res.code === 0) {
           message.success('创建成功');
           setModalVisible(false);
-          loadData();
+          setCurrentMonth(dayjs());
         }
       }
-    } catch (error) {
+    } catch {
       message.error('保存失败');
     } finally {
       setSubmitLoading(false);
     }
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       title: '日期',
       dataIndex: 'created_at',
@@ -323,7 +333,7 @@ export function RecordsPage() {
           </Button>
           <Popconfirm
             title="确定要删除这条记录吗？"
-            onConfirm={() => handleDelete(record.record_id!)}
+            onConfirm={() => void handleDelete(record.record_id!)}
             okText="确定"
             cancelText="取消"
           >
@@ -334,9 +344,12 @@ export function RecordsPage() {
         </Space>
       ),
     },
-  ];
+  ], [categories]);
 
-  const sortedRecords = [...records].sort((a, b) => b.created_at - a.created_at);
+  const sortedRecords = useMemo(() => 
+    [...records].sort((a, b) => b.created_at - a.created_at),
+    [records]
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

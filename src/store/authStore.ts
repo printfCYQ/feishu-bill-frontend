@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -30,7 +29,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-}

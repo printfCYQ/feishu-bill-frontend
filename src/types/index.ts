@@ -19,7 +19,7 @@ export interface ExpenseRecord {
   created_at: number;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   code: number;
   message: string;
   data: T;
@@ -30,4 +30,19 @@ export interface SummaryData {
   total_expense: number;
   balance: number;
   category_stats: { [key: string]: { income: number; expense: number } };
+}
+
+export interface RecordFormData {
+  type: 'income' | 'expense';
+  amount: number;
+  category_id: string;
+  category_name: string;
+  note: string;
+  created_at: number;
+}
+
+export interface CategoryFormData {
+  name: string;
+  type: 'income' | 'expense';
+  icon: string;
 }

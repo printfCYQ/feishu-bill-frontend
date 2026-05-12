@@ -4,7 +4,7 @@ import { CategoriesPage } from './pages/CategoriesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { RecordsPage } from './pages/RecordsPage';
-import { AuthProvider, useAuthStore } from './store/auth';
+import { useAuthStore } from './store/authStore';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
@@ -59,11 +59,7 @@ function AppRoutes() {
 }
 
 function App() {
-  return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
-  );
+  return <AppRoutes />;
 }
 
 export default App;

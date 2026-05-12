@@ -3,7 +3,7 @@ import { DollarSign, LogIn } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuthStore } from '../store/auth';
+import { useAuthStore } from '../store/authStore';
 
 const { Title, Text } = Typography;
 

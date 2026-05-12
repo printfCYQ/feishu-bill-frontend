@@ -14,7 +14,7 @@ import {
 import { Edit, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import type { Category } from '../types';
+import type { Category, CategoryFormData } from '../types';
 
 const defaultIcons = ['🍔', '🚗', '🏠', '🎮', '📚', '💊', '💼', '💰', '🎁', '🛒'];
 
@@ -25,7 +25,7 @@ export function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState(defaultIcons[0]);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<CategoryFormData>();
 
   const loadCategories = async () => {
     setLoading(true);

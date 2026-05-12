@@ -1,6 +1,6 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 import type { ApiResponse, Category, ExpenseRecord, SummaryData } from '../types';
-import { useAuthStore } from '../store/auth';
 
 const SUPABASE_URL = 'https://aoivqgfavozkbutsckrr.supabase.co';
 const LOCAL_API_URL = 'http://127.0.0.1:54321';
@@ -54,7 +54,14 @@ export const api = {
     return `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
   },
 
-  async login(code: string): Promise<ApiResponse<any>> {
+  async login(code: string): Promise<ApiResponse<{
+    access_token: string;
+    feishu_user: {
+      open_id: string;
+      name: string;
+      avatar_url?: string;
+    };
+  }>> {
     const response = await apiClient.get(`/functions/v1/feishu_login?code=${code}`);
     return response.data;
   },
@@ -64,17 +71,17 @@ export const api = {
     return response.data;
   },
 
-  async createCategory(category: Omit<Category, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<any>> {
+  async createCategory(category: Omit<Category, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<Category>> {
     const response = await apiClient.post('/functions/v1/api_categories', category);
     return response.data;
   },
 
-  async updateCategory(record_id: string, category: Partial<Category>): Promise<ApiResponse<any>> {
+  async updateCategory(record_id: string, category: Partial<Category>): Promise<ApiResponse<Category>> {
     const response = await apiClient.put('/functions/v1/api_categories', { record_id, ...category });
     return response.data;
   },
 
-  async deleteCategory(record_id: string): Promise<ApiResponse<any>> {
+  async deleteCategory(record_id: string): Promise<ApiResponse<{ success: boolean }>> {
     const response = await apiClient.delete('/functions/v1/api_categories', {
       params: { record_id },
     });
@@ -101,17 +108,17 @@ export const api = {
     return response.data;
   },
 
-  async createRecord(record: Omit<ExpenseRecord, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<any>> {
+  async createRecord(record: Omit<ExpenseRecord, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<ExpenseRecord>> {
     const response = await apiClient.post('/functions/v1/api_records', record);
     return response.data;
   },
 
-  async updateRecord(record_id: string, record: Partial<ExpenseRecord>): Promise<ApiResponse<any>> {
+  async updateRecord(record_id: string, record: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> {
     const response = await apiClient.put('/functions/v1/api_records', { record_id, ...record });
     return response.data;
   },
 
-  async deleteRecord(record_id: string): Promise<ApiResponse<any>> {
+  async deleteRecord(record_id: string): Promise<ApiResponse<{ success: boolean }>> {
     const response = await apiClient.delete('/functions/v1/api_records', {
       params: { record_id },
     });
