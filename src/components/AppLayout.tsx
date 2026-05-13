@@ -8,6 +8,7 @@ import {
   LogOut,
   Receipt,
   Tags,
+  Upload,
   User,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -28,6 +29,11 @@ const menuItems: MenuProps['items'] = [
     key: '/records',
     icon: <Receipt size={20} />,
     label: <Link to="/records">账单记录</Link>,
+  },
+  {
+    key: '/import',
+    icon: <Upload size={20} />,
+    label: <Link to="/import">导入数据</Link>,
   },
   {
     key: '/categories',
