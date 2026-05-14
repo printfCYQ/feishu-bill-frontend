@@ -1,355 +1,263 @@
-import {
-  Button,
-  Card,
-  Col,
-  Collapse,
-  DatePicker,
-  Form,
-  Input,
-  InputNumber,
-  message,
-  Modal,
-  Popconfirm,
-  Radio,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-} from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormRadio, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
+import { Button, Card, Col, DatePicker, Modal, message, Row, Statistic, Tag } from 'antd';
+import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  Edit,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, DollarSign, Edit2, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import type { Category, ExpenseRecord, RecordFormData } from '../types';
+import type { Category, ExpenseRecord } from '../types';
 
-function RecordForm({
-  editingRecord,
-  categories,
-  onSubmit,
-  submitLoading,
-}: {
-  editingRecord: ExpenseRecord | null;
-  categories: Category[];
-  onSubmit: (values: RecordFormData) => void;
-  submitLoading: boolean;
-}) {
-  const [form] = Form.useForm();
-  const selectedType = Form.useWatch('type', form) || 'expense';
-
-  useEffect(() => {
-    if (editingRecord) {
-      form.setFieldsValue({
-        ...editingRecord,
-        created_at: dayjs(editingRecord.created_at),
-      });
-    } else {
-      form.resetFields();
-      form.setFieldsValue({
-        type: 'expense',
-        created_at: dayjs(),
-      });
-    }
-  }, [editingRecord, form]);
-
-  const handleSubmit = async () => {
-    if (submitLoading) return;
-    try {
-      const values = await form.validateFields();
-      const category = categories.find((c) => c.id === values.category_id);
-      const submitData = {
-        ...values,
-        category_name: category?.name || '',
-        note: values.note || '',
-        created_at: values.created_at.valueOf(),
-      };
-      await onSubmit(submitData);
-    } catch {
-      message.error('保存失败');
-    }
-  };
-
-  return (
-    <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-      <Form.Item name="type" label="类型" rules={[{ required: true }]}>
-        <Radio.Group
-          size="large"
-          style={{ width: '100%' }}
-        >
-          <Radio.Button value="expense" style={{ flex: 1, textAlign: 'center' }}>
-            支出
-          </Radio.Button>
-          <Radio.Button value="income" style={{ flex: 1, textAlign: 'center' }}>
-            收入
-          </Radio.Button>
-        </Radio.Group>
-      </Form.Item>
-
-      <Form.Item name="amount" label="金额" rules={[{ required: true }]}>
-        <InputNumber
-          style={{ width: '100%' }}
-          size="large"
-          placeholder="请输入金额"
-          prefix="¥"
-          precision={2}
-          min={0.01}
-        />
-      </Form.Item>
-
-      <Form.Item
-        name="category_id"
-        label="分类"
-        rules={[{ required: true, message: '请选择分类' }]}
-      >
-        <Select
-          size="large"
-          placeholder="请选择分类"
-          options={categories
-            .filter((c) => c.type === selectedType)
-            .map((c) => ({
-              value: c.id,
-              label: (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>{c.icon}</span>
-                  {c.name}
-                </span>
-              ),
-            }))}
-        />
-      </Form.Item>
-
-      <Form.Item name="created_at" label="日期">
-        <DatePicker style={{ width: '100%' }} size="large" />
-      </Form.Item>
-
-      <Form.Item name="note" label="备注">
-        <Input size="large" placeholder="可选，添加备注信息" />
-      </Form.Item>
-
-      <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-        <Button
-          type="primary"
-          size="large"
-          block
-          loading={submitLoading}
-          onClick={handleSubmit}
-        >
-          保存
-        </Button>
-      </div>
-    </Form>
-  );
+interface RecordFormValues {
+  type: 'income' | 'expense';
+  amount: number;
+  category_id: string;
+  note: string;
+  created_at: Dayjs;
 }
 
 export function RecordsPage() {
-  const [records, setRecords] = useState<ExpenseRecord[]>([]);
+  const actionRef = useRef<ActionType>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<ExpenseRecord | null>(null);
   const [currentMonth, setCurrentMonth] = useState(dayjs());
-  const [filterType, setFilterType] = useState<string>('');
-  const [filterCategory, setFilterCategory] = useState<string>('');
-  const [filterNote, setFilterNote] = useState<string>('');
-  const [filterAmountMin, setFilterAmountMin] = useState<number | undefined>();
-  const [filterAmountMax, setFilterAmountMax] = useState<number | undefined>();
-  const [submitLoading, setSubmitLoading] = useState(false);
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
+  const [editingRecord, setEditingRecord] = useState<ExpenseRecord | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await api.getCategories();
+      if (res.code === 0) {
+        setCategories(res.data || []);
+      }
+    } catch {
+      message.error('加载分类失败');
+    }
+  }, []);
+
+  const loadSummary = useCallback(async (month: Dayjs) => {
+    try {
+      const res = await api.getSummary(month.year(), month.month() + 1);
+      if (res.code === 0 && res.data) {
+        setSummary({
+          income: res.data.total_income || 0,
+          expense: res.data.total_expense || 0,
+          balance: res.data.balance || 0,
+        });
+      }
+    } catch {
+      message.error('加载统计失败');
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    
-    async function fetchData() {
-      setLoading(true);
-      try {
-        const [recordsRes, categoriesRes, summaryRes] = await Promise.all([
-          api.getRecords({
-            year: currentMonth.year(),
-            month: currentMonth.month() + 1,
-            type: filterType || undefined,
-            category_id: filterCategory || undefined,
-            note: filterNote || undefined,
-            amount_min: filterAmountMin,
-            amount_max: filterAmountMax,
-          }),
-          api.getCategories(),
-          api.getSummary(currentMonth.year(), currentMonth.month() + 1),
-        ]);
-        
-        if (cancelled) return;
-        
-        if (recordsRes.code === 0) {
-          setRecords(recordsRes.data || []);
-        }
-        if (categoriesRes.code === 0) {
-          setCategories(categoriesRes.data || []);
-        }
-        if (summaryRes.code === 0 && summaryRes.data) {
-          setSummary({
-            income: summaryRes.data.total_income || 0,
-            expense: summaryRes.data.total_expense || 0,
-            balance: summaryRes.data.balance || 0,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          message.error('加载数据失败');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
+    const timer = setTimeout(() => {
+      loadCategories();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadCategories]);
 
-    void fetchData();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [currentMonth, filterType, filterCategory, filterNote, filterAmountMin, filterAmountMax]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadSummary(currentMonth);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [currentMonth, loadSummary]);
 
-  const handleAdd = () => {
-    setEditingRecord(null);
-    setModalVisible(true);
-  };
-
-  const handleEdit = (record: ExpenseRecord) => {
-    setEditingRecord(record);
-    setModalVisible(true);
-  };
-
-  const handleDelete = async (record_id: string) => {
+  const handleDelete = useCallback(async (record_id: string) => {
     try {
       const res = await api.deleteRecord(record_id);
       if (res.code === 0) {
         message.success('删除成功');
-        setCurrentMonth(dayjs()); 
+        actionRef.current?.reload();
+        loadSummary(currentMonth);
       }
     } catch {
       message.error('删除失败');
     }
-  };
+  }, [currentMonth, loadSummary]);
 
-  const handleSubmit = async (submitData: RecordFormData) => {
-    setSubmitLoading(true);
+  const handleSubmit = useCallback(async (values: RecordFormValues) => {
     try {
+      const category = categories.find((c) => c.id === values.category_id);
+      let createdAt: number;
+
+      const dateValue = values.created_at;
+
+      if (dayjs.isDayjs(dateValue)) {
+        createdAt = dateValue.valueOf();
+      } else if (typeof dateValue === 'number' && dateValue > 0) {
+        createdAt = dateValue;
+      } else if (typeof dateValue === 'string' && dateValue) {
+        const parsed = dayjs(dateValue);
+        if (parsed.isValid()) {
+          createdAt = parsed.valueOf();
+        } else {
+          createdAt = Date.now();
+        }
+      } else {
+        createdAt = Date.now();
+      }
+
+      const submitData = {
+        type: values.type,
+        amount: values.amount,
+        category_id: values.category_id,
+        category_name: category?.name || '',
+        note: values.note || '',
+        created_at: createdAt,
+      };
+
       if (editingRecord) {
         const res = await api.updateRecord(editingRecord.record_id!, submitData);
         if (res.code === 0) {
           message.success('更新成功');
-          setModalVisible(false);
-          setCurrentMonth(dayjs());
+          setEditingRecord(null);
+          actionRef.current?.reload();
+          loadSummary(currentMonth);
         }
       } else {
         const res = await api.createRecord(submitData);
         if (res.code === 0) {
           message.success('创建成功');
-          setModalVisible(false);
-          setCurrentMonth(dayjs());
+          setEditingRecord(null);
+          actionRef.current?.reload();
+          loadSummary(currentMonth);
         }
       }
     } catch {
       message.error('保存失败');
-    } finally {
-      setSubmitLoading(false);
     }
-  };
+  }, [categories, editingRecord, currentMonth, loadSummary]);
 
-  const columns = useMemo(() => [
+  const categoryOptions = useMemo(() => categories.map((c) => ({
+    value: c.id,
+    label: (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>{c.icon}</span>
+        {c.name}
+      </span>
+    ),
+  })), [categories]);
+
+  const columns: ProColumns<ExpenseRecord>[] = [
+    {
+      title: '#',
+      key: 'index',
+      width: 50,
+      render: (_: unknown, __: unknown, index: number) => index + 1,
+      search: false,
+    },
     {
       title: '日期',
       dataIndex: 'created_at',
-      key: 'created_at',
-      width: 140,
-      render: (ts: number) => dayjs(ts).format('YYYY-MM-DD'),
+      valueType: 'date',
+      width: 120,
+      render: (_: React.ReactNode, record: ExpenseRecord) => dayjs(record.created_at).format('YYYY-MM-DD'),
       sorter: (a: ExpenseRecord, b: ExpenseRecord) => a.created_at - b.created_at,
     },
     {
       title: '分类',
-      key: 'category',
+      dataIndex: 'category_id',
+      valueType: 'select',
       width: 180,
-      render: (_: unknown, record: ExpenseRecord) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20 }}>
-            {categories.find((c) => c.id === record.category_id)?.icon || '💰'}
-          </span>
-          <span>{record.category_name}</span>
-        </div>
-      ),
+      render: (_: React.ReactNode, record: ExpenseRecord) => {
+        const cat = categories.find((c) => c.id === record.category_id);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>{cat?.icon || '💰'}</span>
+            <span>{record.category_name}</span>
+          </div>
+        );
+      },
+      fieldProps: {
+        placeholder: '选择分类',
+        options: categoryOptions,
+        allowClear: true,
+      },
     },
     {
       title: '类型',
       dataIndex: 'type',
-      key: 'type',
+      valueType: 'select',
       width: 100,
-      render: (type: string) => (
-        <Tag color={type === 'income' ? 'green' : 'red'}>
-          {type === 'income' ? '收入' : '支出'}
+      render: (_: React.ReactNode, record: ExpenseRecord) => (
+        <Tag color={record.type === 'income' ? 'green' : 'red'}>
+          {record.type === 'income' ? '收入' : '支出'}
         </Tag>
       ),
+      fieldProps: {
+        placeholder: '类型',
+        options: [
+          { value: 'income', label: '收入' },
+          { value: 'expense', label: '支出' },
+        ],
+        allowClear: true,
+      },
+      valueEnum: {
+        income: { text: '收入', status: 'Success' },
+        expense: { text: '支出', status: 'Error' },
+      },
     },
     {
       title: '金额',
       dataIndex: 'amount',
-      key: 'amount',
+      valueType: 'money',
       width: 150,
-      align: 'right' as const,
-      render: (amount: number, record: ExpenseRecord) => (
+      align: 'right',
+      render: (_: React.ReactNode, record: ExpenseRecord) => (
         <span style={{
           fontSize: 18,
           fontWeight: 'bold',
           color: record.type === 'income' ? '#16a34a' : '#dc2626',
         }}>
-          {record.type === 'income' ? '+' : '-'} ¥{amount.toLocaleString()}
+          {record.type === 'income' ? '+' : '-'} ¥{record.amount.toLocaleString()}
         </span>
       ),
       sorter: (a: ExpenseRecord, b: ExpenseRecord) => a.amount - b.amount,
+      search: false,
     },
     {
       title: '备注',
       dataIndex: 'note',
-      key: 'note',
-      render: (text: string) => text || '-',
+      valueType: 'text',
+      render: (text: React.ReactNode) => (text as string) || '-',
+      fieldProps: {
+        placeholder: '搜索备注',
+      },
     },
     {
       title: '操作',
       key: 'action',
       width: 150,
-      render: (_: unknown, record: ExpenseRecord) => (
-        <Space>
-          <Button type="text" icon={<Edit size={16} />} onClick={() => handleEdit(record)}>
+      search: false,
+      render: (_: React.ReactNode, record: ExpenseRecord) => (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            type="text"
+            icon={React.createElement(Edit2, { size: 16 })}
+            onClick={() => { setEditingRecord(record); setModalOpen(true); }}
+          >
             编辑
           </Button>
-          <Popconfirm
-            title="确定要删除这条记录吗？"
-            onConfirm={() => void handleDelete(record.record_id!)}
-            okText="确定"
-            cancelText="取消"
+          <Button
+            type="text"
+            danger
+            icon={React.createElement(Trash2, { size: 16 })}
+            onClick={() => {
+              Modal.confirm({
+                title: '确认删除',
+                content: '确定要删除这条记录吗？',
+                onOk: () => handleDelete(record.record_id!),
+              });
+            }}
           >
-            <Button type="text" danger icon={<Trash2 size={16} />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+            删除
+          </Button>
+        </div>
       ),
     },
-  ], [categories]);
-
-  const sortedRecords = useMemo(() => 
-    [...records].sort((a, b) => b.created_at - a.created_at),
-    [records]
-  );
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -373,102 +281,14 @@ export function RecordsPage() {
             icon={<ChevronRight size={18} />}
             onClick={() => setCurrentMonth((prev) => prev.add(1, 'month'))}
           />
-          <Button
-            type="link"
-            onClick={() => setCurrentMonth(dayjs())}
-          >
+          <Button type="link" onClick={() => setCurrentMonth(dayjs())}>
             今天
           </Button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Select
-            placeholder="全部类型"
-            style={{ width: 120 }}
-            value={filterType || undefined}
-            onChange={setFilterType}
-            options={[
-              { value: '', label: '全部类型' },
-              { value: 'income', label: '收入' },
-              { value: 'expense', label: '支出' },
-            ]}
-          />
-          <Select
-            placeholder="全部分类"
-            style={{ width: 150 }}
-            value={filterCategory || undefined}
-            onChange={setFilterCategory}
-            options={[
-              { value: '', label: '全部分类' },
-              ...categories.map((c) => ({
-                value: c.id,
-                label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 16 }}>{c.icon}</span>
-                    {c.name}
-                  </span>
-                ),
-              })),
-            ]}
-          />
-          <Button
-            type="primary"
-            size="large"
-            icon={<Plus size={20} />}
-            onClick={handleAdd}
-          >
-            记一笔
-          </Button>
-        </div>
+        <Button type="primary" size="large" icon={React.createElement(PlusOutlined)} onClick={() => { setEditingRecord(null); setModalOpen(true); }}>
+          记一笔
+        </Button>
       </div>
-
-      <Collapse
-        ghost
-        items={[{
-          key: 'filters',
-          label: '更多筛选条件',
-          children: (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Input
-                placeholder="备注搜索"
-                style={{ width: 200 }}
-                allowClear
-                value={filterNote}
-                onChange={(e) => setFilterNote(e.target.value)}
-              />
-              <span style={{ color: '#666' }}>金额:</span>
-              <InputNumber
-                placeholder="最小"
-                style={{ width: 120 }}
-                min={0}
-                precision={2}
-                value={filterAmountMin}
-                onChange={(v) => setFilterAmountMin(v ?? undefined)}
-              />
-              <span style={{ color: '#666' }}>-</span>
-              <InputNumber
-                placeholder="最大"
-                style={{ width: 120 }}
-                min={0}
-                precision={2}
-                value={filterAmountMax}
-                onChange={(v) => setFilterAmountMax(v ?? undefined)}
-              />
-              {(filterNote || filterAmountMin !== undefined || filterAmountMax !== undefined) && (
-                <Button
-                  type="link"
-                  onClick={() => {
-                    setFilterNote('');
-                    setFilterAmountMin(undefined);
-                    setFilterAmountMax(undefined);
-                  }}
-                >
-                  清空筛选
-                </Button>
-              )}
-            </div>
-          ),
-        }]}
-      />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={8}>
@@ -477,8 +297,7 @@ export function RecordsPage() {
               title={<span style={{ color: '#15803d' }}>本月收入</span>}
               value={summary.income}
               precision={2}
-              prefix={<ArrowUp style={{ color: '#16a34a' }} size={20} />}
-              styles={{ content: { color: '#15803d', fontWeight: 'bold', fontSize: '1.5rem' } }}
+              prefix={<ArrowUp style={{ color: '#16a34a' }} />}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />
           </Card>
@@ -489,8 +308,7 @@ export function RecordsPage() {
               title={<span style={{ color: '#b91c1c' }}>本月支出</span>}
               value={summary.expense}
               precision={2}
-              prefix={<ArrowDown style={{ color: '#dc2626' }} size={20} />}
-              styles={{ content: { color: '#b91c1c', fontWeight: 'bold', fontSize: '1.5rem' } }}
+              prefix={<ArrowDown style={{ color: '#dc2626' }} />}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />
           </Card>
@@ -501,8 +319,7 @@ export function RecordsPage() {
               title={<span style={{ color: '#1d4ed8' }}>本月结余</span>}
               value={summary.balance}
               precision={2}
-              prefix={<DollarSign style={{ color: '#2563eb' }} size={20} />}
-              styles={{ content: { color: '#1d4ed8', fontWeight: 'bold', fontSize: '1.5rem' } }}
+              prefix={<DollarSign style={{ color: '#2563eb' }} />}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />
           </Card>
@@ -510,30 +327,93 @@ export function RecordsPage() {
       </Row>
 
       <Card>
-        <Table
+        <ProTable
+          actionRef={actionRef}
           columns={columns}
-          dataSource={sortedRecords}
+          request={async (params) => {
+            try {
+              const res = await api.getRecords({
+                year: currentMonth.year(),
+                month: currentMonth.month() + 1,
+                type: params.type,
+                category_id: params.category_id,
+                note: params.note,
+              });
+              return {
+                data: res.data || [],
+                success: res.code === 0,
+                total: res.data?.length || 0,
+              };
+            } catch {
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
           rowKey="record_id"
-          loading={loading}
-          pagination={{ pageSize: 15 }}
+          search={{}}
+          pagination={{
+            defaultPageSize: 25,
+            pageSizeOptions: [10, 25, 50, 100],
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+          }}
+          options={false}
+          toolBarRender={() => []}
         />
       </Card>
 
-      <Modal
+      <ModalForm
+        key={editingRecord?.record_id || 'new'}
         title={editingRecord ? '编辑记录' : '记一笔'}
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        cancelText="取消"
-        width={500}
-        footer={null}
+        open={modalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) {
+            setEditingRecord(null);
+          }
+        }}
+        onFinish={async (values) => {
+          await handleSubmit(values as RecordFormValues);
+          setModalOpen(false);
+          return true;
+        }}
+        initialValues={editingRecord ? {
+          ...editingRecord,
+          created_at: editingRecord.created_at ? dayjs(editingRecord.created_at) : dayjs(),
+        } : {
+          type: 'expense',
+          created_at: dayjs(),
+        }}
       >
-        <RecordForm
-          editingRecord={editingRecord}
-          categories={categories}
-          onSubmit={handleSubmit}
-          submitLoading={submitLoading}
+        <ProFormRadio.Group
+          name="type"
+          label="类型"
+          options={[
+            { label: '支出', value: 'expense' },
+            { label: '收入', value: 'income' },
+          ]}
+          rules={[{ required: true }]}
         />
-      </Modal>
+        <ProFormDigit
+          name="amount"
+          label="金额"
+          min={0.01}
+          precision={2}
+          fieldProps={{ prefix: '¥' }}
+          rules={[{ required: true, message: '请输入金额' }]}
+        />
+        <ProFormSelect
+          name="category_id"
+          label="分类"
+          options={categoryOptions}
+          rules={[{ required: true, message: '请选择分类' }]}
+        />
+        <ProFormDatePicker name="created_at" label="日期" />
+        <ProFormText name="note" label="备注" placeholder="可选，添加备注信息" />
+      </ModalForm>
     </div>
   );
 }

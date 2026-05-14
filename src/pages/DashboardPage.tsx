@@ -61,7 +61,7 @@ export function DashboardPage() {
         justifyContent: 'center',
         height: 384,
       }}>
-        <Spin size="large" description="加载中..." />
+        <Spin size="large" />
       </div>
     );
   }
@@ -95,7 +95,7 @@ export function DashboardPage() {
               </span>}
               value={summary?.total_income || 0}
               precision={2}
-              styles={{ content: { color: '#15803d', fontWeight: 'bold', fontSize: '2rem' } }}
+              style={{ color: '#15803d', fontWeight: 'bold', fontSize: '2rem' }}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />
           </Card>
@@ -108,7 +108,7 @@ export function DashboardPage() {
               </span>}
               value={summary?.total_expense || 0}
               precision={2}
-              styles={{ content: { color: '#b91c1c', fontWeight: 'bold', fontSize: '2rem' } }}
+              style={{ color: '#b91c1c', fontWeight: 'bold', fontSize: '2rem' }}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />
           </Card>
@@ -131,12 +131,10 @@ export function DashboardPage() {
               </span>}
               value={summary?.balance || 0}
               precision={2}
-              styles={{
-                content: {
-                  color: (summary?.balance || 0) >= 0 ? '#1d4ed8' : '#b91c1c',
-                  fontWeight: 'bold',
-                  fontSize: '2rem',
-                },
+              style={{
+                color: (summary?.balance || 0) >= 0 ? '#1d4ed8' : '#b91c1c',
+                fontWeight: 'bold',
+                fontSize: '2rem',
               }}
               formatter={(value) => `¥${Number(value).toLocaleString()}`}
             />

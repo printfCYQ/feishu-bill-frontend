@@ -9,7 +9,6 @@ export interface Category {
 
 export interface ExpenseRecord {
   record_id?: string;
-  id: string;
   user_id?: string;
   amount: number;
   type: 'income' | 'expense';

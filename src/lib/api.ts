@@ -113,6 +113,19 @@ export const api = {
     return response.data;
   },
 
+  async batchCreateRecords(records: Omit<ExpenseRecord, 'id' | 'record_id' | 'user_id'>[]): Promise<ApiResponse<{
+    success_count: number;
+    error_count: number;
+    results: ExpenseRecord[];
+    errors: string[];
+  }>> {
+    const response = await apiClient.post('/functions/v1/api_records', 
+      { records }, 
+      { params: { action: 'batch' } }
+    );
+    return response.data;
+  },
+
   async updateRecord(record_id: string, record: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> {
     const response = await apiClient.put('/functions/v1/api_records', { record_id, ...record });
     return response.data;

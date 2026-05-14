@@ -1,172 +1,95 @@
-import type { MenuProps } from 'antd';
-import { Avatar, Button, Dropdown, Layout, Menu, Typography } from 'antd';
 import {
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  LogOut,
-  Receipt,
-  Tags,
-  Upload,
-  User,
-} from 'lucide-react';
+  LogoutOutlined,
+  BarChartOutlined,
+  FileTextOutlined,
+  UploadOutlined,
+  TagsOutlined,
+} from '@ant-design/icons';
+import React from 'react';
+import { ProLayout } from '@ant-design/pro-components';
+import type { MenuDataItem } from '@ant-design/pro-components';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
-const { Sider, Content, Header } = Layout;
-const { Title } = Typography;
-
-const menuItems: MenuProps['items'] = [
+const menuData: MenuDataItem[] = [
   {
-    key: '/',
-    icon: <BarChart3 size={20} />,
-    label: <Link to="/">统计分析</Link>,
+    path: '/',
+    name: '统计分析',
+    icon: React.createElement(BarChartOutlined),
   },
   {
-    key: '/records',
-    icon: <Receipt size={20} />,
-    label: <Link to="/records">账单记录</Link>,
+    path: '/records',
+    name: '账单记录',
+    icon: React.createElement(FileTextOutlined),
   },
   {
-    key: '/import',
-    icon: <Upload size={20} />,
-    label: <Link to="/import">导入数据</Link>,
+    path: '/import',
+    name: '导入数据',
+    icon: React.createElement(UploadOutlined),
   },
   {
-    key: '/categories',
-    icon: <Tags size={20} />,
-    label: <Link to="/categories">分类管理</Link>,
+    path: '/categories',
+    name: '分类管理',
+    icon: React.createElement(TagsOutlined),
   },
 ];
 
-interface LabelWithProps {
-  props?: {
-    children?: string;
-  };
-}
-
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuthStore();
-  const location = useLocation();
+  const { logout } = useAuthStore();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const userMenuItems: MenuProps['items'] = [
-    {
-      key: 'logout',
-      icon: <LogOut size={16} />,
-      label: '退出登录',
-      onClick: handleLogout,
-    },
-  ];
-
-  const getPageTitle = () => {
-    const currentItem = menuItems?.find((item) => item?.key === location.pathname);
-    if (currentItem && 'label' in currentItem && currentItem.label) {
-      if (typeof currentItem.label === 'object' && currentItem.label !== null && 'props' in currentItem.label) {
-        return (currentItem.label as LabelWithProps).props?.children || '首页';
-      }
-    }
-    return '首页';
-  };
-
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        trigger={null}
-        collapsible
-        collapsed={collapsed}
-        theme="light"
-        width={260}
-        style={{ borderRight: '1px solid #f0f0f0' }}
-      >
+    <ProLayout
+      location={{
+        pathname: location.pathname,
+      }}
+      logo={
         <div style={{
-          height: 64,
+          width: 40,
+          height: 40,
+          background: 'linear-gradient(to bottom right, #2563eb, #4f46e5)',
+          borderRadius: 12,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderBottom: '1px solid #f0f0f0',
+          fontSize: 22,
+          color: 'white',
+          fontWeight: 'bold',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              width: 40,
-              height: 40,
-              background: 'linear-gradient(to bottom right, #2563eb, #4f46e5)',
-              borderRadius: 12,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <DollarSign size={22} style={{ color: 'white' }} />
-            </div>
-            {!collapsed && (
-              <span style={{ fontSize: 20, fontWeight: 700, color: '#1f2937' }}>飞书记账</span>
-            )}
-          </div>
+          ¥
         </div>
-
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          style={{ border: 'none', marginTop: 16 }}
-        />
-      </Sider>
-
-      <Layout>
-        <Header style={{
-          background: 'white',
-          borderBottom: '1px solid #f0f0f0',
-          padding: '0 24px',
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <Button
-            type="text"
-            icon={collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{ marginRight: 16 }}
-          />
-          <Title level={4} style={{ margin: 0 }}>
-            {getPageTitle()}
-          </Title>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                cursor: 'pointer',
-                padding: '4px 12px',
-                borderRadius: 8,
-              }}>
-                <Avatar
-                  size="large"
-                  icon={<User size={20} />}
-                  src={user?.avatar}
-                />
-                {user?.name && (
-                  <span style={{ color: '#374151', fontWeight: 500 }}>{user.name}</span>
-                )}
-              </div>
-            </Dropdown>
-          </div>
-        </Header>
-
-        <Content style={{ background: '#f9fafb', padding: 24, overflow: 'auto' }}>
-          {children}
-        </Content>
-      </Layout>
-    </Layout>
+      }
+      title="飞书记账"
+      layout="mix"
+      splitMenus={false}
+      fixedHeader
+      contentWidth="Fluid"
+      menuDataRender={() => menuData}
+      menuItemRender={(item, dom) => (
+        <div onClick={() => navigate(item.path || '/')}>
+          {dom}
+        </div>
+      )}
+      actionsRender={() => [
+        React.createElement(
+          'div',
+          {
+            key: 'logout',
+            onClick: handleLogout,
+            style: { cursor: 'pointer', color: '#666', fontSize: 16 },
+          },
+          React.createElement(LogoutOutlined)
+        ),
+      ]}
+    >
+      {children}
+    </ProLayout>
   );
 }

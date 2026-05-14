@@ -64,7 +64,10 @@ export function LoginPage() {
         justifyContent: 'center',
         minHeight: '100vh',
       }}>
-        <Spin size="large" description="正在登录..." />
+        <div style={{ textAlign: 'center' }}>
+          <Spin size="large" />
+          <p style={{ marginTop: 16 }}>正在登录...</p>
+        </div>
       </div>
     );
   }

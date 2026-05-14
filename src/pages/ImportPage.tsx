@@ -1,6 +1,11 @@
+import React from 'react';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, InputNumber, message, Progress, Row, Space, Table, Upload } from 'antd';
+import { ProTable } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
+import { Alert, Button, Card, Col, InputNumber, Modal, Progress, Row, Space } from 'antd';
+import { Upload, message } from 'antd';
 import { useCallback, useMemo, useState } from 'react';
+import { api } from '../lib/api';
 
 interface ParsedRecord {
   key: string;
@@ -10,15 +15,13 @@ interface ParsedRecord {
   category_id: string;
   category_name: string;
   note: string;
-  alipay_category: string; // 支付宝的交易分类
+  alipay_category: string;
   original_data: string[];
 }
 
 function parseAlipayCSV(csvText: string): ParsedRecord[] {
-  // 手动解析 - 处理所有可能的换行符
   const allLines = csvText.split(/\r?\n/);
 
-  // 找到表头行的索引
   let headerLineIndex = -1;
   for (let i = 0; i < allLines.length; i++) {
     const line = allLines[i];
@@ -34,12 +37,10 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
 
   const records: ParsedRecord[] = [];
 
-  // 从表头下一行开始处理
   for (let i = headerLineIndex + 1; i < allLines.length; i++) {
     const line = allLines[i].trim();
     if (!line) continue;
 
-    // 简单的CSV解析 - 处理引号
     const values: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -61,7 +62,6 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
       continue;
     }
 
-    // 检查交易状态
     const status = values[8] || '';
     if (status && !status.includes('成功') && !status.includes('交易成功')) {
       continue;
@@ -71,9 +71,8 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
     const typeStr = values[5] || '';
     const amountStr = values[6]?.replace(/"/g, '').replace(/¥|￥/g, '') || '0';
     const note = values[4] || '';
-    const alipayCategory = values[1] || ''; // 交易对方（交易分类）
+    const alipayCategory = values[1] || values[2] || '';
 
-    // 解析日期
     let date: Date;
     try {
       const cleanedTime = timeStr.replace(/\[|\]/g, '').trim();
@@ -84,11 +83,9 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
       continue;
     }
 
-    // 解析金额
     let amount = parseFloat(amountStr);
     if (isNaN(amount) || amount === 0) continue;
 
-    // 确定收支类型
     let type: 'income' | 'expense';
     if (typeStr.includes('收入')) {
       type = 'income';
@@ -108,7 +105,7 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
       created_at: date.getTime(),
       type,
       amount: Math.abs(amount),
-      category_id: alipayCategory, // 直接使用支付宝的交易分类作为 category_id
+      category_id: alipayCategory,
       category_name: alipayCategory,
       note,
       alipay_category: alipayCategory,
@@ -119,14 +116,12 @@ function parseAlipayCSV(csvText: string): ParsedRecord[] {
   return records;
 }
 
-// 读取文件内容，支持GBK编码
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error);
 
-    // 尝试用GBK编码读取，然后回退到UTF-8
     try {
       reader.readAsText(file, 'GBK');
     } catch {
@@ -144,9 +139,6 @@ export function ImportPage() {
   const [totalToImport, setTotalToImport] = useState(0);
   const [minAmountFilter, setMinAmountFilter] = useState<number | null>(null);
 
-  // 移除自动分类匹配，保留原始记录
-
-  // 使用 useMemo 计算过滤后的记录
   const filteredRecords = useMemo(() => {
     if (minAmountFilter === null || minAmountFilter <= 0) {
       return rawRecords;
@@ -154,13 +146,12 @@ export function ImportPage() {
     return rawRecords.filter(record => record.amount >= minAmountFilter);
   }, [rawRecords, minAmountFilter]);
 
-  // 在上传文件时，存储原始记录
   const handleFileChange = useCallback(async (file: File) => {
     let text: string;
     try {
       text = await readFileAsText(file);
     } catch {
-      text = await file.text(); // 回退到默认编码
+      text = await file.text();
     }
 
     const records = parseAlipayCSV(text);
@@ -185,37 +176,91 @@ export function ImportPage() {
     const recordsToImport = filteredRecords
       .filter(r => selectedRowKeys.includes(r.key))
       .filter(r => r.category_id);
-    console.log(recordsToImport);
-    return;
 
     if (recordsToImport.length === 0) {
-      message.error('没有可导入的记录（需要先匹配分类）');
+      message.error('没有可导入的记录');
       return;
     }
 
-    setImporting(true);
-    setProgress(0);
-    setUploaded(0);
-    setTotalToImport(recordsToImport.length);
+    Modal.confirm({
+      title: '确认导入',
+      content: `确定要导入 ${recordsToImport.length} 条记录吗？`,
+      onOk: async () => {
+        setImporting(true);
+        setProgress(0);
+        setUploaded(0);
+        setTotalToImport(recordsToImport.length);
 
-    // TODO
-    // 实现API调用，导入记录
+        try {
+          const response = await api.batchCreateRecords(
+            recordsToImport.map(r => ({
+              created_at: r.created_at,
+              type: r.type,
+              amount: r.amount,
+              category_id: r.category_id,
+              category_name: r.category_name,
+              note: r.note,
+            }))
+          );
+
+          if (response.code === 0) {
+            const { success_count, error_count, errors } = response.data;
+            setUploaded(success_count);
+            setProgress(100);
+
+            if (error_count === 0) {
+              message.success(`成功导入 ${success_count} 条记录`);
+              setRawRecords([]);
+              setSelectedRowKeys([]);
+            } else {
+              Modal.warning({
+                title: '导入完成',
+                content: (
+                  <div>
+                    <p>成功导入: {success_count} 条</p>
+                    <p>失败: {error_count} 条</p>
+                    <div style={{ maxHeight: 200, overflow: 'auto', background: '#f5f5f5', padding: 12 }}>
+                      {errors.map((err, i) => (
+                        <div key={i} style={{ fontSize: 12, color: '#666' }}>{err}</div>
+                      ))}
+                    </div>
+                  </div>
+                ),
+              });
+            }
+          } else {
+            throw new Error(response.message || '导入失败');
+          }
+        } catch (error) {
+          console.error('Import error:', error);
+          message.error(error instanceof Error ? error.message : '导入失败');
+        } finally {
+          setImporting(false);
+        }
+      },
+    });
   }, [selectedRowKeys, filteredRecords]);
 
-  const columns = [
+  const columns: ProColumns<ParsedRecord>[] = [
+    {
+      title: '#',
+      key: 'index',
+      width: 50,
+      render: (_: React.ReactNode, __: ParsedRecord, index: number) => index + 1,
+    },
     {
       title: '日期',
       dataIndex: 'created_at',
       key: 'created_at',
       width: 120,
-      render: (ts: number) => new Date(ts).toLocaleDateString('zh-CN'),
+      render: (ts: React.ReactNode) => new Date(ts as number).toLocaleDateString('zh-CN'),
     },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
       width: 80,
-      render: (type: string) => (
+      render: (type: React.ReactNode) => (
         <span style={{ color: type === 'income' ? '#52c41a' : '#ff4d4f' }}>
           {type === 'income' ? '收入' : '支出'}
         </span>
@@ -226,13 +271,13 @@ export function ImportPage() {
       dataIndex: 'amount',
       key: 'amount',
       width: 100,
-      align: 'right' as const,
-      render: (amount: number, record: ParsedRecord) => (
+      align: 'right',
+      render: (_: React.ReactNode, record: ParsedRecord) => (
         <span style={{
           color: record.type === 'income' ? '#52c41a' : '#ff4d4f',
           fontWeight: 'bold'
         }}>
-          {record.type === 'income' ? '+' : '-'} ¥{amount.toFixed(2)}
+          {record.type === 'income' ? '+' : '-'} ¥{(record.amount).toFixed(2)}
         </span>
       ),
     },
@@ -241,7 +286,7 @@ export function ImportPage() {
       dataIndex: 'category_name',
       key: 'category_name',
       width: 120,
-      render: (category_name: string) => (
+      render: (category_name: React.ReactNode) => (
         <span style={{ color: '#1890ff' }}>{category_name}</span>
       ),
     },
@@ -256,7 +301,7 @@ export function ImportPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Card>
-        <Space orientation="vertical" style={{ width: '100%' }} size="large">
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
           <Upload.Dragger
             accept=".csv"
             showUploadList={false}
@@ -264,15 +309,14 @@ export function ImportPage() {
             disabled={importing}
           >
             <p className="ant-upload-drag-icon">
-              <InboxOutlined />
-            </p>
+              {React.createElement(InboxOutlined)}</p>
             <p className="ant-upload-text">点击或拖拽 CSV 文件到此处上传</p>
             <p className="ant-upload-hint">支持支付宝交易明细 CSV 文件</p>
           </Upload.Dragger>
 
           {filteredRecords.length > 0 && (
             <Alert
-              title={`已解析 ${filteredRecords.length} 条记录，请检查后点击导入`}
+              message={`已解析 ${filteredRecords.length} 条记录，请检查后点击导入`}
               type="info"
               showIcon
             />
@@ -310,22 +354,33 @@ export function ImportPage() {
               </Space>
             }
           >
-            <Table
+            <ProTable
               columns={columns}
-              dataSource={filteredRecords}
+              request={async () => ({
+                data: filteredRecords,
+                success: true,
+                total: filteredRecords.length,
+              })}
               rowSelection={{
                 selectedRowKeys,
                 onChange: (selectedRowKeys) => setSelectedRowKeys(selectedRowKeys as string[]),
               }}
               rowKey="key"
               size="small"
-              pagination={{ pageSize: 15 }}
+              pagination={{
+                defaultPageSize: 15,
+                pageSizeOptions: [10, 15, 25, 50, 100],
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条`,
+              }}
               scroll={{ x: 800 }}
+              search={false}
+              options={false}
             />
           </Card>
 
           <Card>
-            <Row gutter={24} align="middle">
+            <Row gutter={[24, 0]} align="middle">
               <Col flex="auto">
                 {importing ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -351,7 +406,7 @@ export function ImportPage() {
                   </Button>
                   <Button
                     type="primary"
-                    icon={<UploadOutlined />}
+                    icon={React.createElement(UploadOutlined)}
                     onClick={handleImport}
                     disabled={importing || selectedRowKeys.length === 0}
                     loading={importing}
