@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
-import type { ApiResponse, Category, ExpenseRecord, SummaryData } from '../types';
 
 const SUPABASE_URL = 'https://aoivqgfavozkbutsckrr.supabase.co';
 const LOCAL_API_URL = 'http://127.0.0.1:54321';
@@ -47,6 +46,8 @@ apiClient.interceptors.response.use(
 );
 
 export const api = {
+  client: apiClient,
+  
   getFeishuAuthUrl(): string {
     const appId = 'cli_a975802a39799be6';
     const frontendUrl = window.location.origin;
@@ -54,71 +55,51 @@ export const api = {
     return `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
   },
 
-  async login(code: string): Promise<ApiResponse<{
-    access_token: string;
-    feishu_user: {
-      open_id: string;
-      name: string;
-      avatar_url?: string;
-    };
-  }>> {
+  async login(code: string): Promise<unknown> {
     const response = await apiClient.get(`/functions/v1/feishu_login?code=${code}`);
     return response.data;
   },
 
-  async getCategories(): Promise<ApiResponse<Category[]>> {
+  async getCategories(): Promise<unknown> {
     const response = await apiClient.get('/functions/v1/api_categories');
     return response.data;
   },
 
-  async createCategory(category: Omit<Category, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<Category>> {
+  async createCategory(category: unknown): Promise<unknown> {
     const response = await apiClient.post('/functions/v1/api_categories', category);
     return response.data;
   },
 
-  async updateCategory(record_id: string, category: Partial<Category>): Promise<ApiResponse<Category>> {
-    const response = await apiClient.put('/functions/v1/api_categories', { record_id, ...category });
+  async updateCategory(record_id: string, category: unknown): Promise<unknown> {
+    const response = await apiClient.put('/functions/v1/api_categories', { record_id, ...(category as Record<string, unknown>) });
     return response.data;
   },
 
-  async deleteCategory(record_id: string): Promise<ApiResponse<{ success: boolean }>> {
+  async deleteCategory(record_id: string): Promise<unknown> {
     const response = await apiClient.delete('/functions/v1/api_categories', {
       params: { record_id },
     });
     return response.data;
   },
 
-  async getRecords(params?: {
-    year?: number;
-    month?: number;
-    type?: string;
-    category_id?: string;
-    note?: string;
-    amount_min?: number;
-    amount_max?: number;
-  }): Promise<ApiResponse<ExpenseRecord[]>> {
+  async getRecords(params?: unknown): Promise<unknown> {
     const response = await apiClient.get('/functions/v1/api_records', { params });
     return response.data;
   },
 
-  async getRecord(record_id: string): Promise<ApiResponse<ExpenseRecord>> {
+  async getRecord(record_id: string): Promise<unknown> {
     const response = await apiClient.get('/functions/v1/api_records', {
       params: { record_id },
     });
     return response.data;
   },
 
-  async createRecord(record: Omit<ExpenseRecord, 'id' | 'record_id' | 'user_id'>): Promise<ApiResponse<ExpenseRecord>> {
+  async createRecord(record: unknown): Promise<unknown> {
     const response = await apiClient.post('/functions/v1/api_records', record);
     return response.data;
   },
 
-  async batchCreateRecords(records: Omit<ExpenseRecord, 'id' | 'record_id' | 'user_id'>[]): Promise<ApiResponse<{
-    success_count: number;
-    error_count: number;
-    results: ExpenseRecord[];
-    errors: string[];
-  }>> {
+  async batchCreateRecords(records: unknown[]): Promise<unknown> {
     const response = await apiClient.post('/functions/v1/api_records', 
       { records }, 
       { params: { action: 'batch' } }
@@ -126,22 +107,31 @@ export const api = {
     return response.data;
   },
 
-  async updateRecord(record_id: string, record: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> {
-    const response = await apiClient.put('/functions/v1/api_records', { record_id, ...record });
+  async updateRecord(record_id: string, record: unknown): Promise<unknown> {
+    const response = await apiClient.put('/functions/v1/api_records', { record_id, ...(record as Record<string, unknown>) });
     return response.data;
   },
 
-  async deleteRecord(record_id: string): Promise<ApiResponse<{ success: boolean }>> {
+  async deleteRecord(record_id: string): Promise<unknown> {
     const response = await apiClient.delete('/functions/v1/api_records', {
       params: { record_id },
     });
     return response.data;
   },
 
-  async getSummary(year: number, month: number): Promise<ApiResponse<SummaryData>> {
+  async getSummary(year: number, month: number): Promise<unknown> {
     const response = await apiClient.get('/functions/v1/api_records', {
       params: { action: 'summary', year, month },
     });
+    return response.data;
+  },
+
+  async getChartsSummary(year: number, month?: number): Promise<unknown> {
+    const params: Record<string, unknown> = { action: 'charts_summary', year };
+    if (month) {
+      params.month = month;
+    }
+    const response = await apiClient.get('/functions/v1/api_records', { params });
     return response.data;
   },
 };

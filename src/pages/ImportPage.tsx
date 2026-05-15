@@ -220,7 +220,7 @@ export function ImportPage() {
                     <p>成功导入: {success_count} 条</p>
                     <p>失败: {error_count} 条</p>
                     <div style={{ maxHeight: 200, overflow: 'auto', background: '#f5f5f5', padding: 12 }}>
-                      {errors.map((err, i) => (
+                      {errors.map((err: string, i: number) => (
                         <div key={i} style={{ fontSize: 12, color: '#666' }}>{err}</div>
                       ))}
                     </div>
