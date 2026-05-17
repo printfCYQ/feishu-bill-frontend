@@ -1,4 +1,5 @@
 import type { ImportSource, ParsedRecord, RecordType } from '../types';
+import { mapAlipayCategory } from './alipayCategoryMapping';
 
 export type { RecordType } from '../types';
 
@@ -83,13 +84,25 @@ export function parseAlipayCSV(csvText: string): ParsedRecord[] {
       }
     }
 
+    // 应用支付宝分类映射
+    const mapped = mapAlipayCategory(alipayCategory, type);
+    let finalType = mapped.type;
+    let finalCategory = mapped.category;
+
+    // 确保类型一致性（优先使用原记录的类型判断）
+    if (type === 'income' && finalType === 'expense') {
+      finalType = 'income';
+    } else if (type === 'expense' && finalType === 'income') {
+      finalType = 'expense';
+    }
+
     records.push({
       key: `alipay-${i}`,
       created_at: date.getTime(),
-      type,
+      type: finalType,
       amount: Math.abs(amount),
-      category_id: alipayCategory,
-      category_name: alipayCategory,
+      category_id: finalCategory,
+      category_name: finalCategory,
       note,
       source_category: alipayCategory,
       original_data: values,

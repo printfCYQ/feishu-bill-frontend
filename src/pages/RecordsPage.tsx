@@ -15,6 +15,7 @@ export function RecordsPage() {
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [editingRecord, setEditingRecord] = useState<ExpenseRecord | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [formType, setFormType] = useState<'expense' | 'income'>('expense');
 
   const loadCategories = useCallback(async () => {
     try {
@@ -123,15 +124,21 @@ export function RecordsPage() {
     }
   }, [categories, editingRecord, currentMonth, loadSummary]);
 
-  const categoryOptions = useMemo(() => categories.map((c) => ({
-    value: c.id,
-    label: (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 16 }}>{c.icon}</span>
-        {c.name}
-      </span>
-    ),
-  })), [categories]);
+  const categoryOptions = useMemo(() => {
+    const filtered = categories.filter((c) => {
+      if (formType === 'income') return c.type === 'income';
+      return c.type === 'expense';
+    });
+    return filtered.map((c) => ({
+      value: c.id,
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>{c.icon}</span>
+          {c.name}
+        </span>
+      ),
+    }));
+  }, [categories, formType]);
 
   const columns: ProColumns<ExpenseRecord>[] = [
     {
@@ -154,20 +161,20 @@ export function RecordsPage() {
       dataIndex: 'category_name',
       valueType: 'select',
       width: 180,
-      // render: (_: React.ReactNode, record: ExpenseRecord) => {
-      //   const cat = categories.find((c) => c.id === record.category_id);
-      //   return (
-      //     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      //       <span style={{ fontSize: 20 }}>{cat?.icon || '💰'}</span>
-      //       <span>{record.category_name}</span>
-      //     </div>
-      //   );
-      // },
-      // fieldProps: {
-      //   placeholder: '选择分类',
-      //   options: categoryOptions,
-      //   allowClear: true,
-      // },
+      render: (_: React.ReactNode, record: ExpenseRecord) => {
+        const cat = categories.find((c) => c.id === record.category_id);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>{cat?.icon || '💰'}</span>
+            <span>{record.category_name}</span>
+          </div>
+        );
+      },
+      fieldProps: {
+        placeholder: '选择分类',
+        options: categoryOptions,
+        allowClear: true,
+      },
     },
     {
       title: '类型',
@@ -373,13 +380,14 @@ export function RecordsPage() {
       </Card>
 
       <ModalForm
-        key={editingRecord?.record_id || 'new'}
+        key={`${modalOpen}-${editingRecord?.record_id || 'new'}`}
         title={editingRecord ? '编辑记录' : '记一笔'}
         open={modalOpen}
         onOpenChange={(open) => {
           setModalOpen(open);
           if (!open) {
             setEditingRecord(null);
+            setFormType('expense');
           }
         }}
         onFinish={async (values) => {
@@ -389,9 +397,10 @@ export function RecordsPage() {
         }}
         initialValues={editingRecord ? {
           ...editingRecord,
+          type: editingRecord.type === 'income' ? 'income' : 'expense',
           created_at: editingRecord.created_at ? dayjs(editingRecord.created_at) : dayjs(),
         } : {
-          type: 'expense',
+          type: formType,
           created_at: dayjs(),
         }}
       >
@@ -403,6 +412,7 @@ export function RecordsPage() {
             { label: '收入', value: 'income' },
           ]}
           rules={[{ required: true }]}
+          fieldProps={{ onChange: (e) => setFormType(e.target.value) }}
         />
         <ProFormDigit
           name="amount"
