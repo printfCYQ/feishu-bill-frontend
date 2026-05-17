@@ -1,16 +1,16 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 import type {
-  Category,
-  ExpenseRecord,
   ApiResponse,
-  SummaryData,
-  ChartsSummaryData,
-  CategoryFormData,
   BatchCreateResult,
-  LoginResult,
-  GetRecordsParams,
+  Category,
+  CategoryFormData,
+  ChartsSummaryData,
+  ExpenseRecord,
   GetCategoriesParams,
+  GetRecordsParams,
+  LoginResult,
+  SummaryData,
 } from '../types';
 
 const SUPABASE_URL = 'https://aoivqgfavozkbutsckrr.supabase.co';
@@ -100,11 +100,13 @@ export const api = {
     return response.data;
   },
 
+  // 获取所有记录
   async getRecords(params?: GetRecordsParams): Promise<ApiResponse<ExpenseRecord[]>> {
     const response = await apiClient.get('/functions/v1/api_records', { params });
     return response.data;
   },
 
+  // 获取单条记录
   async getRecord(record_id: string): Promise<ApiResponse<ExpenseRecord>> {
     const response = await apiClient.get('/functions/v1/api_records', {
       params: { record_id },
@@ -112,6 +114,7 @@ export const api = {
     return response.data;
   },
 
+  // 创建记录
   async createRecord(
     record: Omit<ExpenseRecord, 'record_id'>
   ): Promise<ApiResponse<ExpenseRecord>> {
@@ -119,6 +122,7 @@ export const api = {
     return response.data;
   },
 
+  // 批量创建记录
   async batchCreateRecords(
     records: Omit<ExpenseRecord, 'record_id'>[]
   ): Promise<ApiResponse<BatchCreateResult>> {
@@ -130,6 +134,7 @@ export const api = {
     return response.data;
   },
 
+  // 更新记录-单条
   async updateRecord(
     record_id: string,
     record: Partial<Omit<ExpenseRecord, 'record_id'>>
@@ -141,6 +146,7 @@ export const api = {
     return response.data;
   },
 
+  // 删除记录-单条记录
   async deleteRecord(record_id: string): Promise<ApiResponse<void>> {
     const response = await apiClient.delete('/functions/v1/api_records', {
       params: { record_id },
@@ -148,6 +154,7 @@ export const api = {
     return response.data;
   },
 
+  // 获取统计数据
   async getSummary(year: number, month: number): Promise<ApiResponse<SummaryData>> {
     const response = await apiClient.get('/functions/v1/api_records', {
       params: { action: 'summary', year, month },
@@ -155,6 +162,7 @@ export const api = {
     return response.data;
   },
 
+  // 获取图表统计数据
   async getChartsSummary(
     year: number,
     month?: number

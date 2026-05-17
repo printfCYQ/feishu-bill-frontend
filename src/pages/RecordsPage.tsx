@@ -1,20 +1,12 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormRadio, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { Button, Card, Col, DatePicker, Modal, message, Row, Statistic, Tag } from 'antd';
+import { Button, Card, Col, DatePicker, message, Modal, Row, Statistic, Tag } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, DollarSign, Edit2, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import type { Category, ExpenseRecord } from '../types';
-
-interface RecordFormValues {
-  type: 'income' | 'expense';
-  amount: number;
-  category_id: string;
-  note: string;
-  created_at: Dayjs;
-}
+import type { Category, ExpenseRecord, RecordFormValues } from '../types';
 
 export function RecordsPage() {
   const actionRef = useRef<ActionType>(null);
@@ -100,6 +92,7 @@ export function RecordsPage() {
       }
 
       const submitData = {
+        id: crypto.randomUUID(),
         type: values.type,
         amount: values.amount,
         category_id: values.category_id,
@@ -158,23 +151,23 @@ export function RecordsPage() {
     },
     {
       title: '分类',
-      dataIndex: 'category_id',
+      dataIndex: 'category_name',
       valueType: 'select',
       width: 180,
-      render: (_: React.ReactNode, record: ExpenseRecord) => {
-        const cat = categories.find((c) => c.id === record.category_id);
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>{cat?.icon || '💰'}</span>
-            <span>{record.category_name}</span>
-          </div>
-        );
-      },
-      fieldProps: {
-        placeholder: '选择分类',
-        options: categoryOptions,
-        allowClear: true,
-      },
+      // render: (_: React.ReactNode, record: ExpenseRecord) => {
+      //   const cat = categories.find((c) => c.id === record.category_id);
+      //   return (
+      //     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      //       <span style={{ fontSize: 20 }}>{cat?.icon || '💰'}</span>
+      //       <span>{record.category_name}</span>
+      //     </div>
+      //   );
+      // },
+      // fieldProps: {
+      //   placeholder: '选择分类',
+      //   options: categoryOptions,
+      //   allowClear: true,
+      // },
     },
     {
       title: '类型',
@@ -332,17 +325,31 @@ export function RecordsPage() {
           columns={columns}
           request={async (params) => {
             try {
-              const res = await api.getRecords({
-                year: currentMonth.year(),
-                month: currentMonth.month() + 1,
-                type: params.type,
-                category_id: params.category_id,
-                note: params.note,
+              const response = await api.client.get('/functions/v1/api_records', {
+                params: {
+                  year: currentMonth.year(),
+                  month: currentMonth.month() + 1,
+                  type: params.type,
+                  category_id: params.category_id,
+                  note: params.note,
+                  page: params.current || 1,
+                  pageSize: params.pageSize || 25,
+                },
               });
+              
+              if (response.data.code === 0) {
+                const data = response.data.data;
+                return {
+                  data: data.records || [],
+                  success: true,
+                  total: data.total || 0,
+                };
+              }
+              
               return {
-                data: res.data || [],
-                success: res.code === 0,
-                total: res.data?.length || 0,
+                data: [],
+                success: false,
+                total: 0,
               };
             } catch {
               return {

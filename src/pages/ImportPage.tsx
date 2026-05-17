@@ -1,134 +1,11 @@
-import React from 'react';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
-import { ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Alert, Button, Card, Col, InputNumber, Modal, Progress, Row, Space } from 'antd';
-import { Upload, message } from 'antd';
-import { useCallback, useMemo, useState } from 'react';
+import { ProTable } from '@ant-design/pro-components';
+import { Alert, Button, Card, Col, InputNumber, Modal, Progress, Row, Select, Space, Upload, message } from 'antd';
+import React, { useCallback, useMemo, useState } from 'react';
 import { api } from '../lib/api';
-
-interface ParsedRecord {
-  key: string;
-  created_at: number;
-  type: 'income' | 'expense';
-  amount: number;
-  category_id: string;
-  category_name: string;
-  note: string;
-  alipay_category: string;
-  original_data: string[];
-}
-
-function parseAlipayCSV(csvText: string): ParsedRecord[] {
-  const allLines = csvText.split(/\r?\n/);
-
-  let headerLineIndex = -1;
-  for (let i = 0; i < allLines.length; i++) {
-    const line = allLines[i];
-    if (line.includes('交易时间') && line.includes('收/支')) {
-      headerLineIndex = i;
-      break;
-    }
-  }
-
-  if (headerLineIndex === -1) {
-    return [];
-  }
-
-  const records: ParsedRecord[] = [];
-
-  for (let i = headerLineIndex + 1; i < allLines.length; i++) {
-    const line = allLines[i].trim();
-    if (!line) continue;
-
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
-
-    if (values.length < 7) {
-      continue;
-    }
-
-    const status = values[8] || '';
-    if (status && !status.includes('成功') && !status.includes('交易成功')) {
-      continue;
-    }
-
-    const timeStr = values[0] || '';
-    const typeStr = values[5] || '';
-    const amountStr = values[6]?.replace(/"/g, '').replace(/¥|￥/g, '') || '0';
-    const note = values[4] || '';
-    const alipayCategory = values[1] || values[2] || '';
-
-    let date: Date;
-    try {
-      const cleanedTime = timeStr.replace(/\[|\]/g, '').trim();
-      if (!cleanedTime) continue;
-      date = new Date(cleanedTime);
-      if (isNaN(date.getTime())) continue;
-    } catch {
-      continue;
-    }
-
-    let amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount === 0) continue;
-
-    let type: 'income' | 'expense';
-    if (typeStr.includes('收入')) {
-      type = 'income';
-    } else if (typeStr.includes('支出')) {
-      type = 'expense';
-    } else {
-      if (amount < 0) {
-        type = 'expense';
-        amount = Math.abs(amount);
-      } else {
-        type = 'income';
-      }
-    }
-
-    records.push({
-      key: `record-${i}`,
-      created_at: date.getTime(),
-      type,
-      amount: Math.abs(amount),
-      category_id: alipayCategory,
-      category_name: alipayCategory,
-      note,
-      alipay_category: alipayCategory,
-      original_data: values,
-    });
-  }
-
-  return records;
-}
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-
-    try {
-      reader.readAsText(file, 'GBK');
-    } catch {
-      reader.readAsText(file, 'UTF-8');
-    }
-  });
-}
+import type { Category, ImportSource, ParsedRecord } from '../types';
+import { detectCSVType, parseAlipayCSV, parseSharkCSV, readFileAsText } from '../utils/csvParser';
 
 export function ImportPage() {
   const [rawRecords, setRawRecords] = useState<ParsedRecord[]>([]);
@@ -138,6 +15,8 @@ export function ImportPage() {
   const [uploaded, setUploaded] = useState(0);
   const [totalToImport, setTotalToImport] = useState(0);
   const [minAmountFilter, setMinAmountFilter] = useState<number | null>(null);
+  const [importSource, setImportSource] = useState<ImportSource>('alipay');
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const filteredRecords = useMemo(() => {
     if (minAmountFilter === null || minAmountFilter <= 0) {
@@ -146,15 +25,54 @@ export function ImportPage() {
     return rawRecords.filter(record => record.amount >= minAmountFilter);
   }, [rawRecords, minAmountFilter]);
 
-  const handleFileChange = useCallback(async (file: File) => {
-    let text: string;
+  const loadCategories = useCallback(async () => {
     try {
-      text = await readFileAsText(file);
-    } catch {
-      text = await file.text();
+      const res = await api.getCategories();
+      if (res.code === 0) {
+        setCategories(res.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+    }
+  }, []);
+
+  const handleFileChange = useCallback(async (file: File) => {
+    // 尝试两种编码，取能解析成功的
+    let records: ParsedRecord[] = [];
+    let detectedType: ImportSource | null = null;
+
+    const encodings = importSource === 'shark'
+      ? ['UTF-16', 'UTF-8']
+      : ['GBK', 'UTF-8', 'UTF-16'];
+
+    for (const encoding of encodings) {
+      let text: string;
+      try {
+        text = await readFileAsText(file, encoding);
+      } catch {
+        continue;
+      }
+
+      const type = detectCSVType(text);
+      if (type) {
+        let result: ParsedRecord[] = [];
+        if (type === 'alipay') {
+          result = parseAlipayCSV(text);
+        } else if (type === 'shark') {
+          result = parseSharkCSV(text);
+        }
+
+        if (result.length > 0) {
+          records = result;
+          detectedType = type;
+          break;
+        }
+      }
     }
 
-    const records = parseAlipayCSV(text);
+    if (detectedType && detectedType !== importSource) {
+      setImportSource(detectedType);
+    }
 
     if (records.length === 0) {
       message.error('CSV 文件格式不正确或没有数据');
@@ -165,6 +83,11 @@ export function ImportPage() {
     setRawRecords(records);
     setSelectedRowKeys(records.map(r => r.key));
     return false;
+  }, [importSource]);
+
+  const handleSourceChange = useCallback((value: ImportSource) => {
+    setImportSource(value);
+    message.info(`已切换到${value === 'alipay' ? '支付宝' : '鲨鱼记账'}模式`);
   }, []);
 
   const handleImport = useCallback(async () => {
@@ -173,13 +96,38 @@ export function ImportPage() {
       return;
     }
 
+    await loadCategories();
+
+    const categoryMap = new Map<string, string>();
+    categories.forEach(cat => {
+      categoryMap.set(cat.name, cat.id);
+    });
+
     const recordsToImport = filteredRecords
       .filter(r => selectedRowKeys.includes(r.key))
+      .filter(r => r.category_name)
+      .map(r => {
+        const category_id = categoryMap.get(r.category_name) || '';
+        return {
+          created_at: r.created_at,
+          id: crypto.randomUUID(),
+          type: r.type,
+          amount: r.amount,
+          category_id,
+          category_name: r.category_name,
+          note: r.note,
+        };
+      })
       .filter(r => r.category_id);
 
     if (recordsToImport.length === 0) {
-      message.error('没有可导入的记录');
+      message.error('没有可导入的记录（可能分类名称不匹配）');
       return;
+    }
+
+    const skipped = filteredRecords.filter(r => selectedRowKeys.includes(r.key) && !r.category_name).length;
+    if (skipped > 0) {
+      message.warning(`已跳过 ${skipped} 条无法匹配分类的记录`);
     }
 
     Modal.confirm({
@@ -195,6 +143,7 @@ export function ImportPage() {
           const response = await api.batchCreateRecords(
             recordsToImport.map(r => ({
               created_at: r.created_at,
+              id: crypto.randomUUID(),
               type: r.type,
               amount: r.amount,
               category_id: r.category_id,
@@ -239,7 +188,7 @@ export function ImportPage() {
         }
       },
     });
-  }, [selectedRowKeys, filteredRecords]);
+  }, [selectedRowKeys, filteredRecords, categories, loadCategories]);
 
   const columns: ProColumns<ParsedRecord>[] = [
     {
@@ -270,7 +219,7 @@ export function ImportPage() {
       title: '金额',
       dataIndex: 'amount',
       key: 'amount',
-      width: 100,
+      width: 150,
       align: 'right',
       render: (_: React.ReactNode, record: ParsedRecord) => (
         <span style={{
@@ -302,6 +251,20 @@ export function ImportPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Space>
+            <span>导入来源：</span>
+            <Select
+              value={importSource}
+              onChange={handleSourceChange}
+              style={{ width: 150 }}
+              disabled={importing || rawRecords.length > 0}
+              options={[
+                { label: '支付宝', value: 'alipay' },
+                { label: '鲨鱼记账', value: 'shark' },
+              ]}
+            />
+          </Space>
+
           <Upload.Dragger
             accept=".csv"
             showUploadList={false}
@@ -309,9 +272,14 @@ export function ImportPage() {
             disabled={importing}
           >
             <p className="ant-upload-drag-icon">
-              {React.createElement(InboxOutlined)}</p>
-            <p className="ant-upload-text">点击或拖拽 CSV 文件到此处上传</p>
-            <p className="ant-upload-hint">支持支付宝交易明细 CSV 文件</p>
+              {React.createElement(InboxOutlined)}
+            </p>
+            <p className="ant-upload-text">
+              点击或拖拽 CSV 文件到此处上传
+            </p>
+            <p className="ant-upload-hint">
+              支持 {importSource === 'alipay' ? '支付宝交易明细' : '鲨鱼记账明细'} CSV 文件
+            </p>
           </Upload.Dragger>
 
           {filteredRecords.length > 0 && (

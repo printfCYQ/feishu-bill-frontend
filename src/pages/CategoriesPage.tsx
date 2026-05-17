@@ -66,10 +66,6 @@ export function CategoriesPage() {
           {(type as string) === 'income' ? '收入' : '支出'}
         </Tag>
       ),
-      valueEnum: {
-        income: { text: '收入', status: 'Success' },
-        expense: { text: '支出', status: 'Error' },
-      },
     },
     {
       title: '操作',

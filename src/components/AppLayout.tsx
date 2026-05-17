@@ -4,6 +4,7 @@ import {
   FileTextOutlined,
   UploadOutlined,
   TagsOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import React from 'react';
 import { ProLayout } from '@ant-design/pro-components';
@@ -27,6 +28,11 @@ const menuData: MenuDataItem[] = [
     path: '/import',
     name: '导入数据',
     icon: React.createElement(UploadOutlined),
+  },
+  {
+    path: '/data-center',
+    name: '数据中心',
+    icon: React.createElement(DatabaseOutlined),
   },
   {
     path: '/categories',

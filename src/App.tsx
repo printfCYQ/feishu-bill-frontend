@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { DataCenterPage } from './pages/DataCenterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImportPage } from './pages/ImportPage';
 import { LoginPage } from './pages/LoginPage';
@@ -58,6 +59,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <ImportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/data-center"
+          element={
+            <ProtectedRoute>
+              <DataCenterPage />
             </ProtectedRoute>
           }
         />
